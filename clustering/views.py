@@ -684,13 +684,15 @@ class GetSilhouettePlotView(APIView):
                 )
                 title = f"Silhouette Plot - Tahun {year}"
             else:
+                all_year_results = results.get("results_per_year", {}).get(
+                    "all_years", {}
+                )
                 # All years mode or no year specified
-                clusters = results.get("clusters", [])
-                silhouette_score = results.get("evaluation", {}).get(
+                clusters = all_year_results.get("clusters", [])
+                silhouette_score = all_year_results.get("evaluation", {}).get(
                     "silhouette_score", 0.5
                 )
                 title = "Silhouette Plot"
-
             if not clusters:
                 return Response(
                     {"error": "Tidak ada data cluster untuk ditampilkan"},
