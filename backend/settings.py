@@ -29,7 +29,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 DEBUG = os.environ.get("DEBUG", "0") == "1"
 
 ALLOWED_HOSTS = [
-    ".vercel.app",
+    "cluster-web-backend-production.up.railway.app",
     "localhost",
     "127.0.0.1",
 ]
