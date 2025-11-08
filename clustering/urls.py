@@ -9,6 +9,7 @@ from .views import (
     GetEvaluationMetricsView,
     GetSilhouettePlotView,
     DownloadPDFReportView,
+    DownloadSampleExcelView,
 )
 
 
@@ -60,5 +61,10 @@ urlpatterns = [
         "clustering/download-pdf/<uuid:session_id>/",
         DownloadPDFReportView.as_view(),
         name="download-pdf-report",
+    ),
+    path(
+        "clustering/sample-excel/",
+        DownloadSampleExcelView.as_view(),
+        name="download-sample-excel",
     ),
 ]

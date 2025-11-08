@@ -31,7 +31,10 @@ from .constants import (
     CLUSTERING_FEATURES,
     MATPLOTLIB_BACKEND,
 )
-
+from django.http import FileResponse
+from django.conf import settings
+from rest_framework import status
+from rest_framework.response import Response
 import pandas as pd
 import numpy as np
 import json
@@ -41,6 +44,7 @@ import os
 
 # Configure matplotlib for headless environments
 import matplotlib
+
 matplotlib.use(MATPLOTLIB_BACKEND)
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -52,14 +56,13 @@ class UploadAndProcessView(APIView):
     API View for uploading and processing clustering data.
     Handles file upload, validation, and clustering execution.
     """
-    
+
     def post(self, request):
         """Process uploaded file and perform clustering analysis."""
         file_obj = request.FILES.get("file")
         if not file_obj:
             return Response(
-                {"error": "File tidak ditemukan"}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "File tidak ditemukan"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         # Parse and validate parameters
@@ -79,7 +82,7 @@ class UploadAndProcessView(APIView):
             )
             selected_year = request.POST.get("selected_year")
             clustering_mode = request.POST.get("clustering_mode", MODE_PER_YEAR)
-            
+
             # Get selected years for per_year mode (optional)
             selected_years = self._parse_selected_years(
                 request.POST.get("selected_years")
@@ -89,9 +92,7 @@ class UploadAndProcessView(APIView):
             min_samples = safe_int_conversion(
                 request.POST.get("min_samples"), DEFAULT_MIN_SAMPLES
             )
-            xi = safe_float_conversion(
-                request.POST.get("xi"), DEFAULT_XI
-            )
+            xi = safe_float_conversion(request.POST.get("xi"), DEFAULT_XI)
             min_cluster_size = safe_float_conversion(
                 request.POST.get("min_cluster_size"), DEFAULT_MIN_CLUSTER_SIZE
             )
@@ -113,7 +114,7 @@ class UploadAndProcessView(APIView):
 
         # Normalize column names
         df, column_mapping = normalize_column_names(df)
-        
+
         # Validate required columns
         missing_cols = validate_required_columns(df)
         if missing_cols:
@@ -147,7 +148,9 @@ class UploadAndProcessView(APIView):
         # Validate algorithm
         if algorithm not in SUPPORTED_ALGORITHMS:
             return Response(
-                {"error": f'Algoritma tidak dikenal. Gunakan "{ALGORITHM_FCM}" atau "{ALGORITHM_OPTICS}"'},
+                {
+                    "error": f'Algoritma tidak dikenal. Gunakan "{ALGORITHM_FCM}" atau "{ALGORITHM_OPTICS}"'
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -187,12 +190,12 @@ class UploadAndProcessView(APIView):
             {"session_id": str(session.id), "results": results},
             status=status.HTTP_201_CREATED,
         )
-    
+
     def _parse_selected_years(self, selected_years_json):
         """Parse selected years from JSON string."""
         if not selected_years_json:
             return None
-        
+
         try:
             selected_years = json.loads(selected_years_json)
             if selected_years:
@@ -201,9 +204,9 @@ class UploadAndProcessView(APIView):
                 return selected_years
         except Exception as e:
             print(f"⚠️ Error parsing selected_years: {e}")
-        
+
         return None
-    
+
     def _execute_clustering(
         self,
         df,
@@ -240,7 +243,7 @@ class UploadAndProcessView(APIView):
                 print(f"🎯 Single year clustering for {selected_year}")
             else:
                 print(f"🗓️ Per year clustering for all available years")
-            
+
             return self._run_per_year_clustering(
                 df=df,
                 algorithm=algorithm,
@@ -254,7 +257,7 @@ class UploadAndProcessView(APIView):
                 selected_year=selected_year,
                 selected_years=selected_years,
             )
-    
+
     def _run_all_years_clustering(
         self,
         df,
@@ -288,7 +291,7 @@ class UploadAndProcessView(APIView):
                 min_cluster_size=min_cluster_size,
                 selected_year=selected_year,
             )
-    
+
     def _run_per_year_clustering(
         self,
         df,
@@ -654,125 +657,162 @@ class GetSilhouettePlotView(APIView):
     """
     API endpoint to generate silhouette plot as PNG image
     """
+
     def get(self, request, session_id: str, year: str = None):
         try:
             session = ClusteringSession.objects.get(id=session_id)
         except ClusteringSession.DoesNotExist:
             return Response(
-                {"error": "Session tidak ditemukan"}, 
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "Session tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             results = session.results
-            clustering_type = results.get('clustering_type', 'per_year')
-            
+            clustering_type = results.get("clustering_type", "per_year")
+
             # Get appropriate data based on clustering type and year
-            if clustering_type == 'per_year' and year:
-                year_results = results.get('results_per_year', {}).get(str(year))
+            if clustering_type == "per_year" and year:
+                year_results = results.get("results_per_year", {}).get(str(year))
                 if not year_results:
                     return Response(
-                        {"error": f"Hasil untuk tahun {year} tidak ditemukan"}, 
-                        status=status.HTTP_404_NOT_FOUND
+                        {"error": f"Hasil untuk tahun {year} tidak ditemukan"},
+                        status=status.HTTP_404_NOT_FOUND,
                     )
-                clusters = year_results.get('clusters', [])
-                silhouette_score = year_results.get('evaluation', {}).get('silhouette_score', 0.5)
-                title = f'Silhouette Plot - Tahun {year}'
+                clusters = year_results.get("clusters", [])
+                silhouette_score = year_results.get("evaluation", {}).get(
+                    "silhouette_score", 0.5
+                )
+                title = f"Silhouette Plot - Tahun {year}"
             else:
                 # All years mode or no year specified
-                clusters = results.get('clusters', [])
-                silhouette_score = results.get('evaluation', {}).get('silhouette_score', 0.5)
-                title = 'Silhouette Plot'
-            
+                clusters = results.get("clusters", [])
+                silhouette_score = results.get("evaluation", {}).get(
+                    "silhouette_score", 0.5
+                )
+                title = "Silhouette Plot"
+
             if not clusters:
                 return Response(
-                    {"error": "Tidak ada data cluster untuk ditampilkan"}, 
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": "Tidak ada data cluster untuk ditampilkan"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-            
+
             # Generate silhouette plot
             img_buffer = self._create_silhouette_plot(clusters, silhouette_score, title)
-            
+
             # Return as image
-            response = HttpResponse(img_buffer.getvalue(), content_type='image/png')
-            response['Content-Disposition'] = f'inline; filename="silhouette_plot_{session_id}_{year or "all"}.png"'
-            
+            response = HttpResponse(img_buffer.getvalue(), content_type="image/png")
+            response["Content-Disposition"] = (
+                f'inline; filename="silhouette_plot_{session_id}_{year or "all"}.png"'
+            )
+
             return response
-            
+
         except Exception as e:
             print(f"❌ Error generating silhouette plot: {str(e)}")
             import traceback
+
             traceback.print_exc()
             return Response(
-                {"error": f"Gagal membuat silhouette plot: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Gagal membuat silhouette plot: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-    
+
     def _create_silhouette_plot(self, clusters, silhouette_score, title):
         """Create silhouette plot (reused from PDF generator logic)"""
         fig, ax = plt.subplots(figsize=(10, 6))
-        
+
         # Define colors for clusters
         colors_palette = [
-            '#667eea', '#48bb78', '#ed8936', '#f56565', '#38b2ac',
-            '#9f7aea', '#ed64a6', '#ecc94b', '#4299e1', '#fc8181'
+            "#667eea",
+            "#48bb78",
+            "#ed8936",
+            "#f56565",
+            "#38b2ac",
+            "#9f7aea",
+            "#ed64a6",
+            "#ecc94b",
+            "#4299e1",
+            "#fc8181",
         ]
-        
+
         y_lower = 10
-        
+
         for idx, cluster in enumerate(clusters):
-            members = cluster.get('members', [])
-            cluster_id = cluster.get('id', idx)
-            
+            members = cluster.get("members", [])
+            cluster_id = cluster.get("id", idx)
+
             # Calculate approximate silhouette scores
             n_members = len(members)
-            
+
             if n_members == 0:
                 continue
-            
+
             # Create silhouette values (sorted descending)
             silhouette_values = []
             for member in members:
-                if isinstance(member, dict) and 'membership' in member and member['membership'] is not None:
+                if (
+                    isinstance(member, dict)
+                    and "membership" in member
+                    and member["membership"] is not None
+                ):
                     # Convert membership to silhouette-like score
-                    silhouette_values.append(member['membership'] * 0.8 - 0.4)
+                    silhouette_values.append(member["membership"] * 0.8 - 0.4)
                 else:
                     silhouette_values.append(np.random.uniform(0.3, 0.7))
-            
+
             silhouette_values = np.array(sorted(silhouette_values, reverse=True))
-            
+
             y_upper = y_lower + n_members
-            
+
             color = colors_palette[idx % len(colors_palette)]
-            ax.barh(range(y_lower, y_upper), silhouette_values, height=1.0,
-                   color=color, alpha=0.8, edgecolor='none')
-            
+            ax.barh(
+                range(y_lower, y_upper),
+                silhouette_values,
+                height=1.0,
+                color=color,
+                alpha=0.8,
+                edgecolor="none",
+            )
+
             # Label cluster
-            cluster_label = cluster.get('interpretation', {}).get('label', f'Cluster {cluster_id}')
-            ax.text(-0.05, y_lower + 0.5 * n_members, f'C{cluster_id}',
-                   fontsize=10, fontweight='bold')
-            
+            cluster_label = cluster.get("interpretation", {}).get(
+                "label", f"Cluster {cluster_id}"
+            )
+            ax.text(
+                -0.05,
+                y_lower + 0.5 * n_members,
+                f"C{cluster_id}",
+                fontsize=10,
+                fontweight="bold",
+            )
+
             y_lower = y_upper + 10
-        
+
         # Add average line
-        ax.axvline(x=silhouette_score, color="red", linestyle="--", linewidth=2,
-                  label=f'Avg Score: {silhouette_score:.3f}')
-        
-        ax.set_xlabel('Silhouette Coefficient', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Cluster', fontsize=12, fontweight='bold')
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        ax.axvline(
+            x=silhouette_score,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label=f"Avg Score: {silhouette_score:.3f}",
+        )
+
+        ax.set_xlabel("Silhouette Coefficient", fontsize=12, fontweight="bold")
+        ax.set_ylabel("Cluster", fontsize=12, fontweight="bold")
+        ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
         ax.set_xlim([-1, 1])
         ax.set_yticks([])
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3, axis='x')
-        
+        ax.legend(loc="best")
+        ax.grid(True, alpha=0.3, axis="x")
+
         plt.tight_layout()
-        
+
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(img_buffer, format="png", dpi=150, bbox_inches="tight")
         img_buffer.seek(0)
         plt.close(fig)
-        
+
         return img_buffer
 
 
@@ -780,57 +820,104 @@ class DownloadPDFReportView(APIView):
     """
     API endpoint to download complete PDF report with all visualizations
     """
+
     def get(self, request, session_id: str):
         try:
             session = ClusteringSession.objects.get(id=session_id)
         except ClusteringSession.DoesNotExist:
             return Response(
-                {"error": "Session tidak ditemukan"}, 
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "Session tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             results = session.results
-            clustering_type = results.get('clustering_type', 'per_year')
-            
+            clustering_type = results.get("clustering_type", "per_year")
+
             # Determine mode for PDF generation
-            if clustering_type == 'per_year':
-                mode = 'yearly'
+            if clustering_type == "per_year":
+                mode = "yearly"
             else:
-                mode = 'all_years'
-            
+                mode = "all_years"
+
             print(f"📄 Generating PDF report for session {session_id}, mode: {mode}")
-            
+
             # Generate PDF
             pdf_path = generate_pdf_report(results, mode=mode)
-            
+
             print(f"✅ PDF generated successfully: {pdf_path}")
-            
+
             # Check if file exists
             if not os.path.exists(pdf_path):
                 return Response(
-                    {"error": "Failed to generate PDF"}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    {"error": "Failed to generate PDF"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-            
+
             # Read and return PDF file
-            with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="clustering_report_{session_id}_{mode}.pdf"'
-                
+            with open(pdf_path, "rb") as pdf_file:
+                response = HttpResponse(pdf_file.read(), content_type="application/pdf")
+                response["Content-Disposition"] = (
+                    f'attachment; filename="clustering_report_{session_id}_{mode}.pdf"'
+                )
+
             # Clean up temporary file
             try:
                 os.remove(pdf_path)
             except Exception as e:
                 print(f"⚠️ Warning: Could not remove temp file: {e}")
-            
+
             return response
-            
+
         except Exception as e:
             print(f"❌ Error generating PDF: {str(e)}")
             import traceback
+
             traceback.print_exc()
             return Response(
-                {"error": f"Error generating PDF: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Error generating PDF: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class DownloadSampleExcelView(APIView):
+    """
+    API View untuk mengunduh file sample CSV (long format).
+    """
+
+    def get(self, request):
+        file_name = "sample_data_indonesia.csv"
+
+        try:
+            # Dapatkan BASE_DIR dari settings Django
+            # (BASE_DIR di settings.py sudah menunjuk ke root folder)
+            base_dir = settings.BASE_DIR
+
+            # Gunakan pathlib (cara modern) untuk menggabungkan path
+            # Ini akan mencari: {folder-root-proyek}/sample-data/sample_data_indonesia.csv
+            file_path = base_dir / "sample-data" / file_name
+
+            # Periksa apakah file ada di path tersebut
+            if not os.path.exists(file_path):
+                # Jika tidak ada, kirim error 404
+                return Response(
+                    {
+                        "error": f"File sample '{file_name}' tidak ditemukan di path server: {str(file_path)}"
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Buka file dalam mode 'read binary' (rb)
+            response = FileResponse(
+                open(file_path, "rb"), as_attachment=True, filename=file_name
+            )
+            response["Content-Type"] = "text/csv"
+            response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+
+            return response
+
+        except Exception as e:
+            # Jika ada error lain (misal: permission denied), kirim 500
+            return Response(
+                {"error": f"Server gagal memproses file: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
