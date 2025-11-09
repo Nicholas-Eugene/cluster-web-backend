@@ -216,9 +216,9 @@ class ClusteringAlgorithms:
                 centroid = {
                     feat: float(cluster_members_df[feat].mean()) for feat in features
                 }
-                
+
                 # Add averaged values for wide-format data (for visualization)
-                if any('_' in f and f.split('_')[-1].isdigit() for f in features):
+                if any("_" in f and f.split("_")[-1].isdigit() for f in features):
                     averages = calculate_yearly_averages(centroid, features)
                     centroid.update(averages)
 
@@ -226,7 +226,7 @@ class ClusteringAlgorithms:
                 members = []
                 # Get the membership values for this cluster
                 cluster_memberships = u[i, cluster_mask]
-                
+
                 # Get indices in original dataframe for silhouette scores
                 cluster_indices = np.where(cluster_mask)[0]
 
@@ -241,22 +241,24 @@ class ClusteringAlgorithms:
                         "longitude": float(row.get("longitude", 0.0)),
                         "membership": float(cluster_memberships[idx]),
                     }
-                    
+
                     # Add silhouette score for this member (with boundary check)
                     if sil_samples is not None and idx < len(cluster_indices):
                         global_idx = cluster_indices[idx]
                         if global_idx < len(sil_samples):
-                            member_info["silhouette_score"] = float(sil_samples[global_idx])
-                    
+                            member_info["silhouette_score"] = float(
+                                sil_samples[global_idx]
+                            )
+
                     # Add feature values
                     for feature in features:
                         member_info[feature] = float(row.get(feature, 0.0))
-                    
+
                     # Add averaged values for wide-format data (for visualization)
-                    if any('_' in f and f.split('_')[-1].isdigit() for f in features):
+                    if any("_" in f and f.split("_")[-1].isdigit() for f in features):
                         averages = calculate_yearly_averages(member_info, features)
                         member_info.update(averages)
-                    
+
                     members.append(member_info)
 
                 results["clusters"].append(
@@ -270,7 +272,9 @@ class ClusteringAlgorithms:
 
         # Add cluster interpretations
         results["clusters"] = add_cluster_interpretations(results["clusters"])
-        results["interpretation_summary"] = get_cluster_summary_stats(results["clusters"])
+        results["interpretation_summary"] = get_cluster_summary_stats(
+            results["clusters"]
+        )
 
         return results
 
@@ -299,7 +303,6 @@ class ClusteringAlgorithms:
         optics = OPTICS(
             min_samples=min_samples,
             xi=xi,
-            min_cluster_size=min_cluster_size,
         )
         cluster_labels = optics.fit_predict(scaled_data)
 
@@ -374,9 +377,9 @@ class ClusteringAlgorithms:
                         feat: float(cluster_members_df[feat].mean())
                         for feat in features
                     }
-                    
+
                     # Add averaged values for wide-format data (for visualization)
-                    if any('_' in f and f.split('_')[-1].isdigit() for f in features):
+                    if any("_" in f and f.split("_")[-1].isdigit() for f in features):
                         averages = calculate_yearly_averages(centroid, features)
                         centroid.update(averages)
 
@@ -384,7 +387,7 @@ class ClusteringAlgorithms:
                 members = []
                 # Get indices in original dataframe for silhouette scores
                 cluster_indices = np.where(cluster_mask)[0]
-                
+
                 for idx, (_, row) in enumerate(cluster_members_df.iterrows()):
                     member_info = {
                         "kabupaten_kota": str(row.get("kabupaten_kota", "")),
@@ -394,22 +397,22 @@ class ClusteringAlgorithms:
                         "longitude": float(row.get("longitude", 0.0)),
                         "membership": 1.0,  # OPTICS gives hard assignments
                     }
-                    
+
                     # Add silhouette score for this member
                     if sil_samples is not None and idx < len(cluster_indices):
                         sil_val = sil_samples[cluster_indices[idx]]
                         if not np.isnan(sil_val):
                             member_info["silhouette_score"] = float(sil_val)
-                    
+
                     # Add feature values
                     for feature in features:
                         member_info[feature] = float(row.get(feature, 0.0))
-                    
+
                     # Add averaged values for wide-format data (for visualization)
-                    if any('_' in f and f.split('_')[-1].isdigit() for f in features):
+                    if any("_" in f and f.split("_")[-1].isdigit() for f in features):
                         averages = calculate_yearly_averages(member_info, features)
                         member_info.update(averages)
-                    
+
                     members.append(member_info)
 
                 results["clusters"].append(
@@ -423,13 +426,19 @@ class ClusteringAlgorithms:
 
         # Add cluster interpretations
         results["clusters"] = add_cluster_interpretations(results["clusters"])
-        results["interpretation_summary"] = get_cluster_summary_stats(results["clusters"])
+        results["interpretation_summary"] = get_cluster_summary_stats(
+            results["clusters"]
+        )
 
         return results
 
 
 def run_clustering_per_year(
-    df: pd.DataFrame, algorithm: str = "fcm", features: List[str] = None, selected_years: List[int] = None, **kwargs
+    df: pd.DataFrame,
+    algorithm: str = "fcm",
+    features: List[str] = None,
+    selected_years: List[int] = None,
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     API FEATURE 1: Cluster data for each year individually.
@@ -450,7 +459,7 @@ def run_clustering_per_year(
 
     clustering = ClusteringAlgorithms()
     available_years = sorted(df["tahun"].unique())
-    
+
     # Filter to selected years if provided
     if selected_years:
         available_years = [y for y in available_years if y in selected_years]
@@ -513,7 +522,11 @@ def run_clustering_per_year(
         "years_processed": [int(y) for y in available_years],
         "total_years": int(len(available_years)),
         "successful_years": len(successful_years),
-        "success_rate": len(successful_years) / len(available_years) if len(available_years) > 0 else 0.0,
+        "success_rate": (
+            len(successful_years) / len(available_years)
+            if len(available_years) > 0
+            else 0.0
+        ),
         "features_used": features,
         "average_evaluation": {
             "davies_bouldin": float(np.mean(avg_db)) if avg_db else None,
@@ -534,40 +547,36 @@ def run_clustering_per_year(
 def calculate_yearly_averages(data_dict: dict, features: List[str]) -> dict:
     """
     Calculate averages for year-based features.
-    
+
     For example, if features contain ipm_2015, ipm_2016, ..., ipm_2021,
     this will calculate the average and return it as 'ipm'.
-    
+
     Args:
         data_dict: Dictionary containing year-based features
         features: List of feature names
-        
+
     Returns:
         Dictionary with averaged values for ipm, garis_kemiskinan, pengeluaran_per_kapita
     """
     averages = {}
-    
+
     # Group features by base metric
-    metric_groups = {
-        'ipm': [],
-        'garis_kemiskinan': [],
-        'pengeluaran_per_kapita': []
-    }
-    
+    metric_groups = {"ipm": [], "garis_kemiskinan": [], "pengeluaran_per_kapita": []}
+
     for feature in features:
         for metric_name in metric_groups.keys():
-            if feature.startswith(metric_name + '_'):
+            if feature.startswith(metric_name + "_"):
                 value = data_dict.get(feature)
                 if value is not None and not np.isnan(value):
                     metric_groups[metric_name].append(float(value))
-    
+
     # Calculate averages
     for metric_name, values in metric_groups.items():
         if values:
             averages[metric_name] = float(np.mean(values))
         else:
             averages[metric_name] = 0.0
-    
+
     return averages
 
 
