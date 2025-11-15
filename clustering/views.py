@@ -41,6 +41,7 @@ import json
 import io
 import csv
 import os
+from io import BytesIO
 
 # Configure matplotlib for headless environments
 import matplotlib
@@ -887,38 +888,42 @@ class DownloadSampleExcelView(APIView):
     """
 
     def get(self, request):
-        file_name = "sample_data_indonesia.csv"
+        csv_file_name = "sample_data_indonesia.csv"
+        excel_file_name = "sample_data_indonesia.xlsx"
 
         try:
-            # Dapatkan BASE_DIR dari settings Django
-            # (BASE_DIR di settings.py sudah menunjuk ke root folder)
             base_dir = settings.BASE_DIR
+            csv_path = base_dir / "sample-data" / csv_file_name
 
-            # Gunakan pathlib (cara modern) untuk menggabungkan path
-            # Ini akan mencari: {folder-root-proyek}/sample-data/sample_data_indonesia.csv
-            file_path = base_dir / "sample-data" / file_name
-
-            # Periksa apakah file ada di path tersebut
-            if not os.path.exists(file_path):
-                # Jika tidak ada, kirim error 404
+            # Periksa file CSV
+            if not os.path.exists(csv_path):
                 return Response(
                     {
-                        "error": f"File sample '{file_name}' tidak ditemukan di path server: {str(file_path)}"
+                        "error": f"File sample '{csv_file_name}' tidak ditemukan di path server: {str(csv_path)}"
                     },
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Buka file dalam mode 'read binary' (rb)
+            # --- Baca CSV menjadi DataFrame ---
+            df = pd.read_csv(csv_path)
+
+            # --- Convert ke Excel dalam memory ---
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False)
+            output.seek(0)
+
+            # --- Return FileResponse sebagai .xlsx ---
             response = FileResponse(
-                open(file_path, "rb"), as_attachment=True, filename=file_name
+                output,
+                as_attachment=True,
+                filename=excel_file_name
             )
-            response["Content-Type"] = "text/csv"
-            response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+            response["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
             return response
 
         except Exception as e:
-            # Jika ada error lain (misal: permission denied), kirim 500
             return Response(
                 {"error": f"Server gagal memproses file: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
